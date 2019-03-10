@@ -44,7 +44,7 @@ type Peer struct {
 func NewPeer(hosts []string, region string, incoming uint64, serverKey, peerKey []byte, usercmd func(code string, retval ...string)) (*Peer, error) {
 
 	peer := new(Peer)
-	peer.MyAgent = []string{`0.34r`, `toyokun_at_gmail_dot_com`, `Alpha0000`}
+	peer.MyAgent = []string{`0.34r`, `github.com/toyo/epsp`, `20190310`}
 	peer.hosts = hosts
 	peer.usercmd = usercmd
 	peer.region = region
