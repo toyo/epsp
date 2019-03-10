@@ -1,0 +1,20 @@
+inspecode:
+  experimental:
+    ignore: /*_test.go
+    runtime:
+      go: 1
+  # golang configuration.
+  cpd: default
+  gas: default
+  unused: default
+  errcheck: default
+  go-test: default
+  go-vet: default
+  gofmt: default
+  goimports: default
+  golint: default
+  gosimple: default
+  grep: default
+  ineffassign: default
+  interfacer: default
+  misspell: default

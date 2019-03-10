@@ -1,0 +1,134 @@
+<html>
+
+<head>
+	<link href="https://unpkg.com/tabulator-tables@4.2.1/dist/css/tabulator.css" rel="stylesheet">
+	<script type="text/javascript" src="https://unpkg.com/tabulator-tables@4.2.1/dist/js/tabulator.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.24.0/moment.js"
+		integrity="sha256-H9jAz//QLkDOy/nzE9G4aYijQtkLt9FvGmdUTwBk6gs=" crossorigin="anonymous"></script>
+	<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+	<script type="text/javascript">
+		google.charts.load('current', { 'packages': ['geochart'], });
+
+		var d;
+
+		function drawMap() {
+			var data = google.visualization.arrayToDataTable(d, false);
+
+			var options = {
+				region: 'JP',
+				displayMode: 'markers',
+				backgroundColor: '#ecf8fe', //背景色
+				colors: ['white', 'green', 'green', 'green', 'green'] //階層の色
+			};
+			var chart = new google.visualization.GeoChart(document.getElementById('regions_div'));
+			chart.draw(data, options);
+		}
+
+
+
+		var formatterParamsConn = { inputFormat: "YYYY-MM-DDTHH:mm:ss.SSSZ", outputFormat: "ddd HH:mm:ss", invalidPlaceholder: "" };
+		var formatterParams = { inputFormat: "YYYY-MM-DDTHH:mm:ss.SSSZ", outputFormat: "HH:mm:ss", invalidPlaceholder: "" };
+
+		var columns = [
+			{ title: "Peer", field: "PeerID", align: "right", headerSort: false, width: 50, },
+			{ title: "IPPort", field: "IPPort", align: "right", headerSort: false, width: 180, },
+			{ title: "ConnTime", field: "ConnTime", align: "right", width: 110, formatter: "datetime", formatterParams: formatterParamsConn, },
+			{
+				title: "RTT", field: "PingPong", align: "right", headerSort: false, width: 80,
+				formatter: function (cell, formatterParams, onRendered) {
+					if (cell.getValue() != null) {
+						return (Number.parseFloat(cell.getValue()) / 1000000).toFixed(1) + "ms"
+					} else {
+						return;
+					}
+				},
+			},
+			{ title: "LastRX", field: "LastRXTime", align: "right", headerSort: false, width: 80, formatter: "datetime", formatterParams: formatterParams, },
+			{ title: "DiscTime", field: "DiscTime", align: "right", headerSort: false, width: 80, formatter: "datetime", formatterParams: formatterParams, },
+			{ title: "Agent", field: "Agent", headerSort: false, },
+			{ title: "受信", field: "RxUniq", align: "right", headerSort: false, width: 40, },
+			{ title: "重複", field: "RxDup", align: "right", headerSort: false, width: 40, },
+			{ title: "Tx", field: "Tx", align: "right", headerSort: false, width: 40, },
+			{ title: "Rx", field: "Rx", align: "right", headerSort: false, width: 40, },
+		];
+	</script>
+	<style type="text/css">
+		#regions_div {
+			width: 1024px;
+			height: 600px;
+		}
+
+		#cancel {
+			float: right;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="site">
+		<div id="title">EPSP</div>
+		<div id="cancel"><input type="button" value="Terminate My Peer" onclick="cancel()"></div>
+		<div id="main">
+			こちらから接続したピア<div id="Clients">初期化中</div>
+			相手から接続されたピア<div id="Servers">初期化中</div>
+			ピアの地域<div id="regions_div">初期化中</div>
+		</div>
+	</div>
+	</div>
+
+	<script type="text/javascript">
+
+		var cancel = function () {
+			var cancelhttp = new XMLHttpRequest();
+			cancelhttp.open("GET", "cancel");
+			cancelhttp.send()
+		}
+
+		var clientstable = new Tabulator("#Clients", {
+			layout: "fitColumns",
+			responsiveLayout: true,
+			columns: columns,
+			initialSort: [{ column: "ConnTime", dir: "asc" },],
+		});
+		var clients = new WebSocket('ws://' + location.host + '/ws/Clients');
+		clients.onmessage = function (e) {
+			clientstable.setData(e.data);
+			clientstable.setSort([{ column: "ConnTime", dir: "asc" },]);
+		};
+		clients.onclose = function (e) {
+			console.log("clients 切断しました。(" + e.code + ")");
+			clients = new WebSocket('ws://' + location.host + '/ws/Clients');
+		};
+
+		var serverstable = new Tabulator("#Servers", {
+			layout: "fitColumns",
+			responsiveLayout: true,
+			columns: columns,
+			initialSort: [{ column: "ConnTime", dir: "asc" },],
+		});
+		var servers = new WebSocket('ws://' + location.host + '/ws/Servers');
+		servers.onmessage = function (e) {
+			serverstable.setData(e.data);
+			serverstable.setSort([{ column: "ConnTime", dir: "asc" },]);
+		};
+		servers.onclose = function (e) {
+			console.log("servers 切断しました。(" + e.code + ")");
+			servers = new WebSocket('ws://' + location.host + '/ws/Servers');
+		};
+
+		var peercounts = new WebSocket('ws://' + location.host + '/ws/PeerCountByRegion');
+		peercounts.onmessage = function (e) {
+			d = JSON.parse(e.data);
+			if (d.length > 2) {
+				google.charts.setOnLoadCallback(drawMap);
+			}
+		};
+		peercounts.onclose = function (e) {
+			console.log("peercounts 切断しました。(" + e.code + ")");
+			peercounts = new WebSocket('ws://' + location.host + '/ws/PeerCountByRegion');
+		};
+
+	</script>
+</body>
+
+</html>
