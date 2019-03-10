@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/logutils"
-	epsp "github.com/toyo/p2pq"
+	"github.com/toyo/epsp"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 )
