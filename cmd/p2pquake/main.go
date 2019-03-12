@@ -77,7 +77,7 @@ IBEQ==
 	go func() {
 		port := os.Getenv("PORT")
 		if port == "" {
-			port = "8080"
+			port = "6980"
 		}
 
 		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), hs))
