@@ -90,14 +90,14 @@
 			columns: columns,
 			initialSort: [{ column: "ConnTime", dir: "asc" },],
 		});
-		var clients = new WebSocket('ws://' + location.host + '/ws/Clients');
+		var clients = new WebSocket(location.host + '/ws/Clients');
 		clients.onmessage = function (e) {
 			clientstable.setData(e.data);
 			clientstable.setSort([{ column: "ConnTime", dir: "asc" },]);
 		};
 		clients.onclose = function (e) {
 			console.log("clients 切断しました。(" + e.code + ")");
-			clients = new WebSocket('ws://' + location.host + '/ws/Clients');
+			clients = new WebSocket(location.host + '/ws/Clients');
 		};
 
 		var serverstable = new Tabulator("#Servers", {
@@ -106,7 +106,7 @@
 			columns: columns,
 			initialSort: [{ column: "ConnTime", dir: "asc" },],
 		});
-		var servers = new WebSocket('ws://' + location.host + '/ws/Servers');
+		var servers = new WebSocket(location.host + '/ws/Servers');
 		servers.onmessage = function (e) {
 			serverstable.setData(e.data);
 			serverstable.setSort([{ column: "ConnTime", dir: "asc" },]);
