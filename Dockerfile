@@ -12,7 +12,7 @@ COPY --from=builder /go/src/github.com/toyo/epsp/cmd/p2pquake/html/index.html ./
 ENTRYPOINT ["./app","-d"]
 VOLUME ["/tmp"]
 
-EXPOSE 6911:6911
 EXPOSE 6980:6980
+EXPOSE 6911:6911
 
 ENV PORT 6980
