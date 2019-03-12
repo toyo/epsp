@@ -64,6 +64,7 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, myagent []string, port i
 			case <-timer.C:
 				mu.Lock()
 				pps.deleteClosedFromList()
+				pps.deleteManyDuplicatePeer(incoming, 100)
 				mu.Unlock()
 			case <-ctx.Done():
 				timer.Stop()
@@ -105,7 +106,7 @@ func (pps *P2PPeers) AddP2PClients(ctx context.Context, otherPeers []string, mya
 	}
 	wg.Wait()
 	pps.deleteClosedFromList()
-	pps.deleteManyDuplicatePeer(incoming)
+	pps.deleteManyDuplicatePeer(incoming, 10)
 
 }
 
@@ -119,10 +120,10 @@ func (pps *P2PPeers) deleteClosedFromList() {
 	}
 }
 
-func (pps *P2PPeers) deleteManyDuplicatePeer(incoming uint64) {
+func (pps *P2PPeers) deleteManyDuplicatePeer(incoming, rxdup uint64) {
 	// Close connection to the peers who send many duplicate
 	for i := range *pps {
-		if (*pps)[i].RxDup > 10 && (*pps)[i].IsConn() {
+		if (*pps)[i].RxDup > rxdup && (*pps)[i].IsConn() {
 			if (*pps)[i].GetRXUniqRate() > incoming/2 {
 				(*pps)[i].Close()
 				logln(`[INFO] ピア` + (*pps)[i].PeerID + `: 重複過多、終了`)
