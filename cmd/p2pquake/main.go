@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -74,7 +75,12 @@ IBEQ==
 
 	errCh := make(chan error)
 	go func() {
-		errCh <- http.ListenAndServe(`:6980`, hs)
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+
+		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), hs))
 	}()
 
 	go func() {
