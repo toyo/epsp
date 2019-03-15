@@ -159,7 +159,7 @@ restart:
 func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 	recvdata := strings.Split(retval[2], `:`)
 
-	if retval[0][0] == '5' || retval[0][0] == '6' {
+	if (retval[0][0] == '5' || retval[0][0] == '6') && !(retval[0] == `615` || retval[0] == `635`) {
 		expiredate, err := time.Parse(`2006/01/02 15-04-05`, recvdata[1])
 		if err != nil {
 			return err
@@ -223,6 +223,10 @@ func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 		peer.SaveKey()
 	case `635`:
 		recvdata = strings.Split(retval[2], `:`)
+		if recvdata[0] == peer.PeerID {
+			go peer.usercmd(retval[0], recvdata...)
+			return nil // do usercmd because 635 for me.
+		}
 		origp, ok := peer.traceecho.Load(recvdata[1])
 		if !ok { // 一致するバッファがあった場合のみ処理を続けます。
 			return nil
@@ -242,6 +246,9 @@ func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 
 	case `615`:
 		recvdata = strings.Split(retval[2], `:`)
+		if recvdata[0] == peer.PeerID {
+			return nil // do nothing because 615 from me.
+		}
 		if _, ok := peer.traceecho.LoadOrStore(recvdata[1], from); !ok {
 			// 過去の調査エコーバッファと比較し、新規エコーだった場合のみ処理を続けます。
 			// 「一意な数」と「送信元（ソケット番号など、後で送り返しするために必要な値）」を新たにバッファに追加します。
