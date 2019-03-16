@@ -20,8 +20,29 @@ func (p2s P2SClient) GetPeerID() string {
 	return p2s.IPPort
 }
 
+func (p2s *P2SClient) code211(myagent []string) error {
+	logln(`[DEBUG] サーバ` + p2s.EPSPConn.IPPort + `: バージョン要求`)
+	if err := p2s.EPSPConn.Write(`131`, `1`, strings.Join(myagent, `:`)); err != nil {
+		return errors.Wrap(err, `バージョン要求不能`)
+	}
+	logln(`[DEBUG] サーバ` + p2s.EPSPConn.IPPort + `: バージョン返信 ` + strings.Join([]string{`131`, `1`, strings.Join(myagent, `:`)}, ` `))
+	return nil
+}
+
+func (p2s *P2SClient) code212(myagent, retval []string) (myagent0 []string) {
+	logln(`[DEBUG] サーバ` + p2s.EPSPConn.IPPort + `: バージョン受領 ` + retval[2])
+
+	p2s.EPSPConn.Agent = strings.Split(retval[2], `:`)
+	if myagent[0] > p2s.EPSPConn.Agent[0] {
+		myagent[0] = p2s.EPSPConn.Agent[0]
+		logln(`[DEBUG] エージェント名変更: ` + strings.Join(myagent, `:`))
+	}
+	return myagent
+}
+
 // NewP2SClient は、サーバ接続用のクライアントです
-func NewP2SClient(ctx context.Context, paddr string, myagent []string) (p2s *P2SClient, err error) {
+func NewP2SClient(ctx context.Context, paddr string, myagent0 []string) (p2s *P2SClient, myagent []string, err error) {
+	myagent = myagent0
 	p2s = new(P2SClient)
 	p2s.EPSPConn.IPPort = paddr
 	p2s.EPSPConn.conn, err = net.DialContext(ctx, `tcp`, p2s.EPSPConn.IPPort)
@@ -33,10 +54,9 @@ func NewP2SClient(ctx context.Context, paddr string, myagent []string) (p2s *P2S
 	logln(`[INFO] サーバ` + p2s.EPSPConn.IPPort + `: 接続`)
 	p2s.EPSPConn.SetConnTime()
 
-	var retval []string
-
 outerloop:
 	for {
+		var retval []string
 		if retval, err = p2s.EPSPConn.Get(ctx); err != nil { // バージョン要求がこないよ
 			p2s.Close(ctx)
 			err = errors.Wrap(err, `バージョン要求なし: `+strings.Join(retval, ` `))
@@ -45,23 +65,12 @@ outerloop:
 		}
 		switch retval[0] {
 		case `211`: // バージョン要求
-			logln(`[DEBUG] サーバ` + p2s.EPSPConn.IPPort + `: バージョン要求`)
-			if err = p2s.EPSPConn.Write(`131`, `1`, strings.Join(myagent, `:`)); err != nil {
+			if err = p2s.code211(myagent); err != nil {
 				p2s.Close(ctx)
-				err = errors.Wrap(err, `バージョン要求不能`)
 				p2s = nil
-				return
 			}
-			logln(`[DEBUG] サーバ` + p2s.EPSPConn.IPPort + `: バージョン返信 ` + strings.Join([]string{`131`, `1`, strings.Join(myagent, `:`)}, ` `))
 		case `212`: // バージョン受領
-			logln(`[DEBUG] サーバ` + p2s.EPSPConn.IPPort + `: バージョン受領 ` + retval[2])
-
-			p2s.Agent = strings.Split(retval[2], `:`)
-			if myagent[0] > p2s.EPSPConn.Agent[0] {
-				myagent[0] = p2s.EPSPConn.Agent[0]
-				logln(`[DEBUG] エージェント名変更: ` + strings.Join(myagent, `:`))
-			}
-			err = nil
+			myagent = p2s.code212(myagent, retval)
 			break outerloop
 		default:
 			if retval, err = p2s.EPSPConn.Get(ctx); err != nil { // バージョン要求がこないよ

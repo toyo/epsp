@@ -25,7 +25,7 @@ func (p *P2PPeer) chanGet(ctx context.Context, retvalch chan []string, errch cha
 }
 
 // NetLoop は、接続済みTCP接続からデータの読み書きします
-func (p *P2PPeer) NetLoop(ctx context.Context, mypeerid string, agent []string, peers func() []string, p2mpcmd func(peer *P2PPeer, ss []string) (err error)) (err error) {
+func (p *P2PPeer) NetLoop(ctx context.Context, mypeerid string, agent []string, peers func() []string, codep2mp func(peer *P2PPeer, ss []string) (err error)) (err error) {
 	timer := time.NewTicker(5 * time.Minute)
 	defer timer.Stop()
 	retvalch := make(chan []string)
@@ -46,7 +46,7 @@ outerloop:
 				err = errors.Wrap(err, `行読出エラー`)
 				break outerloop
 			}
-			if err = p.loop(retval, mypeerid, agent, peers, p2mpcmd); err != nil {
+			if err = p.loop(retval, mypeerid, agent, peers, codep2mp); err != nil {
 				err = errors.Wrap(err, `Loopエラー`)
 				break outerloop
 			}
@@ -69,14 +69,14 @@ outerloop:
 }
 
 // loop は、送られてきた文字列に対する処理を行います
-func (p *P2PPeer) loop(retval []string, mypeerid string, myagent []string, peers func() []string, p2mpcmd func(peer *P2PPeer, ss []string) (err error)) error {
+func (p *P2PPeer) loop(retval []string, mypeerid string, myagent []string, peers func() []string, codep2mp func(peer *P2PPeer, ss []string) (err error)) error {
 	switch {
 	case len(retval) == 0:
 		return errors.New(`空行`)
 	case len(retval[0]) == 1:
 		return errors.New(`経由数なし: ` + strings.Join(retval, ` `))
 	case retval[0][0] == '5' || retval[0] == `615` || retval[0] == `635`:
-		return errors.Wrap(p2mpcmd(p, retval), `p2mpcmd`) // relay message.
+		return errors.Wrap(codep2mp(p, retval), `codep2mp`) // relay message.
 	default:
 		return errors.Wrap(p.p2pcmd(myagent, mypeerid, peers, retval), `p2pcmd`) // Not relayed.
 	}

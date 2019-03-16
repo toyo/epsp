@@ -79,14 +79,14 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent
 }
 
 // AddP2PClients は、P2PClientsを追加します
-func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPeers []string, myagent []string, p2mpcmd func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) {
+func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPeers []string, myagent []string, codep2mp func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for i := range otherPeers {
 		wg.Add(1)
 		go func(i int) {
-			pc, err := NewP2PClient(ctx, otherPeers[i], ConnectedIPPortPeersList, p2mpcmd)
+			pc, err := NewP2PClient(ctx, otherPeers[i], ConnectedIPPortPeersList, codep2mp)
 			if err != nil {
 				logln(`[INFO] ピア`+pc.GetPeerIDorIPPort()+`: 接続失敗 `, err)
 				wg.Done()
@@ -95,7 +95,7 @@ func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPe
 				*pps = append(*pps, pc)
 				mu.Unlock()
 				wg.Done()
-				err = pc.NetLoop(ctx, mypeerid, myagent, ConnectedIPPortPeersList, p2mpcmd)
+				err = pc.NetLoop(ctx, mypeerid, myagent, ConnectedIPPortPeersList, codep2mp)
 				if err != nil {
 					logln(`[INFO] ピア`, pc.PeerID+`: クライアント通信異常終了 `+strings.Join(pc.Agent, `:`), err)
 				} else {

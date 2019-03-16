@@ -21,7 +21,7 @@ restart:
 		}
 		ctxtimeout, cancel := context.WithTimeout(ctx, 2*time.Second)
 		defer cancel()
-		peer.EPSPServer, err = NewP2SClient(ctxtimeout, peer.hosts[i], peer.MyAgent)
+		peer.EPSPServer, peer.MyAgent, err = NewP2SClient(ctxtimeout, peer.hosts[i], peer.MyAgent)
 
 		if err == nil {
 
@@ -46,11 +46,11 @@ restart:
 				gotTempPeerID = true
 			}
 
-			peer.Clients.AddP2PClients(ctx, peer.PeerID, peer.candidatePeers, peer.MyAgent, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
+			peer.Clients.AddP2PClients(ctx, peer.PeerID, peer.candidatePeers, peer.MyAgent, peer.codep2mp, peer.ConnectedIPPortPeersList, peer.incoming)
 			peer.candidatePeers = []string{}
 
 			peer.serverIsRunning.Do(func() {
-				_, err := peer.Servers.NewP2PServers(ctx, peer.PeerID, peer.MyAgent, port, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
+				_, err := peer.Servers.NewP2PServers(ctx, peer.PeerID, peer.MyAgent, port, peer.codep2mp, peer.ConnectedIPPortPeersList, peer.incoming)
 				if err != nil {
 					logln(`[ERROR] NewP2PServers Error`, err)
 					return
@@ -76,7 +76,7 @@ restart:
 					peer.EPSPServer.Close(ctx)
 					continue restart
 				}
-				peer.Clients.AddP2PClients(ctx, peer.PeerID, getPeers, peer.MyAgent, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
+				peer.Clients.AddP2PClients(ctx, peer.PeerID, getPeers, peer.MyAgent, peer.codep2mp, peer.ConnectedIPPortPeersList, peer.incoming)
 				if err = peer.EPSPServer.TellPeer(peer.Clients, getPeers); err != nil { // 新たに接続出来たピアのIDを通知します。
 					logln(`[WARN] TellPeer ` + err.Error())
 					peer.EPSPServer.Close(ctx)
@@ -108,7 +108,7 @@ restart:
 
 				if peer.PeerCountsByRegion == nil || peer.ProtocolTimeDiff == 0 {
 					var err error
-					if peer.PeerCountsByRegion, err = peer.EPSPServer.PeerCountByRegion(ctx, peer.p2mpcmd); err != nil {
+					if peer.PeerCountsByRegion, err = peer.EPSPServer.PeerCountByRegion(ctx, peer.codep2mp); err != nil {
 						logln(`[DEBUG] PeerCountByRegion`, err)
 					}
 				}
@@ -154,25 +154,25 @@ restart:
 	}
 }
 
-func checkExpired(recvdata []string) (err error) {
+func isExpired(recvdata []string) bool {
 	expiredate, err := time.Parse(`2006/01/02 15-04-05`, recvdata[1])
 	if err != nil {
-		return err
+		return true
 	}
 	if expired := time.Now().After(expiredate); expired {
-		return errors.New("データ有効期限切れ: " + recvdata[1])
+		return true
 	}
-	return nil
+	return false
 }
 
-func (peer *Peer) checkNotDuplicate(from *P2PPeer, recvdata []string) (err error) {
+func (peer *Peer) isDuplicate(from *P2PPeer, recvdata []string) bool {
 	datasig := recvdata[0]
 	if _, dup := peer.sigmap.LoadOrStore(datasig, struct{}{}); dup {
 		from.AddRxDup()
-		return errors.New("重複: " + recvdata[0])
+		return true
 	}
 	from.AddRxUniq()
-	return nil
+	return false
 }
 
 func (peer *Peer) checkSignature(cmd string, recvdata []string) (err error) {
@@ -212,12 +212,12 @@ func (peer *Peer) checkSignature(cmd string, recvdata []string) (err error) {
 	return nil
 }
 
-func (peer *Peer) cmd561(recvdata []string) {
+func (peer *Peer) code561(recvdata []string) {
 	peer.PeerCountsByRegion = NewPeerCount(recvdata[2])
 	peer.SaveKey()
 }
 
-func (peer *Peer) cmd615(from *P2PPeer, recvdata []string, hops string) error {
+func (peer *Peer) code615(from *P2PPeer, recvdata []string, hops string) error {
 	if recvdata[0] == peer.PeerID {
 		return nil // do nothing because 615 from me.
 	}
@@ -234,7 +234,7 @@ func (peer *Peer) cmd615(from *P2PPeer, recvdata []string, hops string) error {
 	return nil
 }
 
-func (peer *Peer) cmd635(retval []string) (sent bool, err error) {
+func (peer *Peer) code635(retval []string) (sent bool, err error) {
 	recvdata := strings.Split(retval[2], `:`)
 
 	if recvdata[0] == peer.PeerID {
@@ -274,38 +274,38 @@ func (peer *Peer) mpReSent(from *P2PPeer, retval []string) error {
 	return nil
 }
 
-func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
+func (peer *Peer) codep2mp(from *P2PPeer, retval []string) error {
 	recvdata := strings.Split(retval[2], `:`)
 
-	if (retval[0][0] == '5' || retval[0][0] == '6') && !(retval[0] == `615` || retval[0] == `635`) {
-		if err := checkExpired(recvdata); err != nil {
-			return errors.Wrap(err, `ピア`+from.GetPeerIDorIPPort()+": "+retval[0]+` `+retval[1])
-		}
-		if err := peer.checkNotDuplicate(from, recvdata); err != nil {
-			return errors.Wrap(err, `ピア`+from.GetPeerIDorIPPort()+": "+retval[0]+` `+retval[1])
-		}
-	}
-
 	if retval[0][0] == '5' {
+		if isExpired(recvdata) {
+			logln(`[DEBUG] ピア` + from.GetPeerIDorIPPort() + ": 期限切れ" + strings.Join(retval, ` `))
+			return nil
+		}
+		if peer.isDuplicate(from, recvdata) {
+			logln(`[DEBUG] ピア` + from.GetPeerIDorIPPort() + ": 重複" + strings.Join(retval, ` `))
+			return nil
+		}
 		if err := peer.checkSignature(retval[0], recvdata); err != nil {
-			return errors.Wrap(err, `ピア`+from.GetPeerIDorIPPort()+": "+retval[0]+` `+retval[1])
+			logln(`[DEBUG] ピア` + from.GetPeerIDorIPPort() + ": 署名 " + err.Error() + `:` + strings.Join(retval, ` `))
+			return nil
 		}
 	}
 
 	switch retval[0] {
 	case `561`:
-		peer.cmd561(recvdata)
+		peer.code561(recvdata)
+	case `615`:
+		if err := peer.code615(from, recvdata, retval[1]); err != nil {
+			return err
+		}
 	case `635`:
-		sent, err := peer.cmd635(retval)
+		sent, err := peer.code635(retval)
 		if err != nil {
 			return err
 		}
 		if sent {
 			return nil
-		}
-	case `615`:
-		if err := peer.cmd615(from, recvdata, retval[1]); err != nil {
-			return err
 		}
 	default:
 		go peer.usercmd(retval[0], recvdata...)
