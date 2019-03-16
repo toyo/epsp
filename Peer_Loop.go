@@ -37,7 +37,6 @@ restart:
 					logln(`[WARN] GetKey ` + err.Error())
 					continue restart
 				}
-				peer.SaveKey()
 			} else {
 				if peer.PeerID, err = peer.EPSPServer.GetTemporaryPeerID(ctx); err != nil {
 					logln(`[WARN] GetTemporaryPeerID ` + err.Error())
@@ -47,11 +46,11 @@ restart:
 				gotTempPeerID = true
 			}
 
-			peer.Clients.AddP2PClients(ctx, peer.candidatePeers, peer.MyAgent, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
+			peer.Clients.AddP2PClients(ctx, peer.PeerID, peer.candidatePeers, peer.MyAgent, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
 			peer.candidatePeers = []string{}
 
 			peer.serverIsRunning.Do(func() {
-				_, err := peer.Servers.NewP2PServers(ctx, peer.MyAgent, port, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
+				_, err := peer.Servers.NewP2PServers(ctx, peer.PeerID, peer.MyAgent, port, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
 				if err != nil {
 					logln(`[ERROR] NewP2PServers Error`, err)
 					return
@@ -77,7 +76,7 @@ restart:
 					peer.EPSPServer.Close(ctx)
 					continue restart
 				}
-				peer.Clients.AddP2PClients(ctx, getPeers, peer.MyAgent, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
+				peer.Clients.AddP2PClients(ctx, peer.PeerID, getPeers, peer.MyAgent, peer.p2mpcmd, peer.ConnectedIPPortPeersList, peer.incoming)
 				if err = peer.EPSPServer.TellPeer(peer.Clients, getPeers); err != nil { // 新たに接続出来たピアのIDを通知します。
 					logln(`[WARN] TellPeer ` + err.Error())
 					peer.EPSPServer.Close(ctx)
@@ -106,7 +105,6 @@ restart:
 					peer.EPSPServer.Close(ctx)
 					continue restart
 				}
-				peer.SaveKey()
 
 				if peer.PeerCountsByRegion == nil || peer.ProtocolTimeDiff == 0 {
 					var err error
@@ -156,110 +154,144 @@ restart:
 	}
 }
 
+func checkExpired(recvdata []string) (err error) {
+	expiredate, err := time.Parse(`2006/01/02 15-04-05`, recvdata[1])
+	if err != nil {
+		return err
+	}
+	if expired := time.Now().After(expiredate); expired {
+		return errors.New("データ有効期限切れ: " + recvdata[1])
+	}
+	return nil
+}
+
+func (peer *Peer) checkNotDuplicate(from *P2PPeer, recvdata []string) (err error) {
+	datasig := recvdata[0]
+	if _, dup := peer.sigmap.LoadOrStore(datasig, struct{}{}); dup {
+		from.AddRxDup()
+		return errors.New("重複: " + recvdata[0])
+	}
+	from.AddRxUniq()
+	return nil
+}
+
+func (peer *Peer) checkSignature(cmd string, recvdata []string) (err error) {
+	switch cmd[2] {
+	case '1': // cmd= 551, 552, 561 サーバ保証用公開鍵
+		fallthrough
+	case '2':
+
+		dataSig := recvdata[0]
+		expDate := recvdata[1]
+		dataBody := recvdata[2]
+
+		if err := DataSignatureCheck(peer.serverKey, dataSig, expDate, dataBody); err != nil {
+			return errors.Wrap(err, `データ署名NG`)
+		}
+
+	case '5': // cmd= 555, 556 ピア保証用公開鍵
+		fallthrough
+	case '6':
+
+		pubKey := recvdata[2]
+		keySig := recvdata[3]
+		keyExpDate := recvdata[4]
+
+		if peerPubKey, err := KeySignatureCheck(peer.peerKey, pubKey, keySig, keyExpDate); err == nil {
+			dataSig := recvdata[0]
+			expDate := recvdata[1]
+			dataBody := recvdata[5]
+
+			if err = DataSignatureCheck(peerPubKey, dataSig, expDate, dataBody); err != nil {
+				return errors.Wrap(err, `鍵署名OK、データ署名NG`)
+			}
+		} else {
+			return errors.Wrap(err, `鍵署名NG`)
+		}
+	}
+	return nil
+}
+
+func (peer *Peer) cmd561(recvdata []string) {
+	peer.PeerCountsByRegion = NewPeerCount(recvdata[2])
+	peer.SaveKey()
+}
+
+func (peer *Peer) cmd615(from *P2PPeer, recvdata []string, hops string) error {
+	if recvdata[0] == peer.PeerID {
+		return nil // do nothing because 615 from me.
+	}
+	if _, ok := peer.traceecho.LoadOrStore(recvdata[1], from); !ok {
+		// 過去の調査エコーバッファと比較し、新規エコーだった場合のみ処理を続けます。
+		// 「一意な数」と「送信元（ソケット番号など、後で送り返しするために必要な値）」を新たにバッファに追加します。
+		err := from.WriteTo(`635`, `1`, strings.Join(recvdata, `:`)+`:`+peer.PeerID+`:`+strings.Join(peer.ConnectedPeersList(), `,`)+`:`+hops)
+		// 送信元に対し、「調査エコーリプライ(コード635)」を送信します。
+		if err != nil {
+			from.Close()
+			return errors.New(`635 Transmit error`)
+		}
+	}
+	return nil
+}
+
+func (peer *Peer) cmd635(retval []string) (sent bool, err error) {
+	recvdata := strings.Split(retval[2], `:`)
+
+	if recvdata[0] == peer.PeerID {
+		go peer.usercmd(retval[0], recvdata...)
+		return true, nil // do usercmd because 635 for me.
+	}
+	origp, ok := peer.traceecho.Load(recvdata[1])
+	if !ok { // 一致するバッファがあった場合のみ処理を続けます。
+		return false, nil
+	}
+	origpeer, ok := origp.(*P2PPeer)
+	if !ok {
+		return false, errors.New(`[ERROR] Type assertion on 635`)
+	}
+	logln(`[DEBUG] ピア` + peer.PeerID + `: ユニキャスト送信:` + origpeer.GetPeerID() + ` ` + strings.Join(retval[:2], ` `))
+	err = origpeer.WriteTo(retval...)
+	// 過去の調査エコーバッファで記憶されている「送信元」に対し、調査エコーリプライをリレーします。
+	if err == nil {
+		return true, nil
+	}
+	// 送信元との接続が切断されている場合は、接続中の全てのピアに対してリレーします。
+	return false, nil
+}
+
 func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 	recvdata := strings.Split(retval[2], `:`)
 
 	if (retval[0][0] == '5' || retval[0][0] == '6') && !(retval[0] == `615` || retval[0] == `635`) {
-		expiredate, err := time.Parse(`2006/01/02 15-04-05`, recvdata[1])
-		if err != nil {
-			return err
+		if err := checkExpired(recvdata); err != nil {
+			return errors.Wrap(err, `ピア`+from.GetPeerIDorIPPort()+": "+retval[0]+` `+retval[1])
 		}
-		if expired := time.Now().After(expiredate); expired {
-			return errors.New(`ピア` + from.GetPeerIDorIPPort() + ": データ有効期限切れ " + retval[0] + ` ` + retval[1])
+		if err := peer.checkNotDuplicate(from, recvdata); err != nil {
+			return errors.Wrap(err, `ピア`+from.GetPeerIDorIPPort()+": "+retval[0]+` `+retval[1])
 		}
-
-		datasig := recvdata[0]
-		if _, dup := peer.sigmap.LoadOrStore(datasig, struct{}{}); dup {
-			logln(`[DEBUG] ピア` + from.GetPeerIDorIPPort() + ": 重複 " + retval[0] + ` ` + retval[1])
-			from.AddRxDup()
-			return nil
-		}
-		from.AddRxUniq()
 	}
 
 	if retval[0][0] == '5' {
-		switch retval[0][2] {
-		case '1': // retval[0]= 551, 552, 561 サーバ保証用公開鍵
-			fallthrough
-		case '2':
-
-			dataSig := recvdata[0]
-			expDate := recvdata[1]
-			dataBody := recvdata[2]
-
-			if err := DataSignatureCheck(peer.serverKey, dataSig, expDate, dataBody); err == nil {
-				logln(`[DEBUG] ピア` + from.GetPeerIDorIPPort() + ": データ署名OK")
-			} else {
-				return errors.Wrap(err, `データ署名NG`)
-			}
-
-		case '5': // retval[0]= 555, 556 ピア保証用公開鍵
-			fallthrough
-		case '6':
-
-			pubKey := recvdata[2]
-			keySig := recvdata[3]
-			keyExpDate := recvdata[4]
-
-			if peerPubKey, err := KeySignatureCheck(peer.peerKey, pubKey, keySig, keyExpDate); err == nil {
-				dataSig := recvdata[0]
-				expDate := recvdata[1]
-				dataBody := recvdata[5]
-
-				if err = DataSignatureCheck(peerPubKey, dataSig, expDate, dataBody); err == nil {
-					logln(`[DEBUG] ピア` + from.GetPeerIDorIPPort() + ": 鍵署名OK、データ署名OK")
-				} else {
-					return errors.Wrap(err, `鍵署名OK、データ署名NG`)
-				}
-			} else {
-				return errors.Wrap(err, `鍵署名NG`)
-			}
+		if err := peer.checkSignature(retval[0], recvdata); err != nil {
+			return errors.Wrap(err, `ピア`+from.GetPeerIDorIPPort()+": "+retval[0]+` `+retval[1])
 		}
 	}
 
 	switch retval[0] {
 	case `561`:
-		peer.PeerCountsByRegion = NewPeerCount(recvdata[2])
-		peer.SaveKey()
+		peer.cmd561(recvdata)
 	case `635`:
-		recvdata = strings.Split(retval[2], `:`)
-		if recvdata[0] == peer.PeerID {
-			go peer.usercmd(retval[0], recvdata...)
-			return nil // do usercmd because 635 for me.
-		}
-		origp, ok := peer.traceecho.Load(recvdata[1])
-		if !ok { // 一致するバッファがあった場合のみ処理を続けます。
-			return nil
-		}
-		origpeer, ok := origp.(*P2PPeer)
-		if !ok {
-			logln(`[ERROR] Type assertion on 635`)
-			return nil
-		}
-		logln(`[DEBUG] ピア` + peer.PeerID + `: ユニキャスト送信:` + origpeer.GetPeerID() + ` ` + strings.Join(retval[:2], ` `))
-		err := origpeer.WriteTo(retval...)
-		// 過去の調査エコーバッファで記憶されている「送信元」に対し、調査エコーリプライをリレーします。
-		if err == nil {
+		if sent, err := peer.cmd635(retval); err != nil {
 			return err
-		}
-		// 送信元との接続が切断されている場合は、接続中の全てのピアに対してリレーします。
-
-	case `615`:
-		recvdata = strings.Split(retval[2], `:`)
-		if recvdata[0] == peer.PeerID {
-			return nil // do nothing because 615 from me.
-		}
-		if _, ok := peer.traceecho.LoadOrStore(recvdata[1], from); !ok {
-			// 過去の調査エコーバッファと比較し、新規エコーだった場合のみ処理を続けます。
-			// 「一意な数」と「送信元（ソケット番号など、後で送り返しするために必要な値）」を新たにバッファに追加します。
-			err := from.WriteTo(`635`, `1`, retval[2]+`:`+peer.PeerID+`:`+strings.Join(peer.ConnectedPeersList(), `,`)+`:`+retval[1])
-			// 送信元に対し、「調査エコーリプライ(コード635)」を送信します。
-			if err != nil {
-				from.Close()
-				return errors.New(`635 Transmit error`)
+		} else {
+			if sent {
+				return nil
 			}
 		}
-	case `247`: // 各地域のピア数を伝達します。 未実装
+	case `615`:
+		if err := peer.cmd615(from, recvdata, retval[1]); err != nil {
+			return err
+		}
 	default:
 		go peer.usercmd(retval[0], recvdata...)
 	}

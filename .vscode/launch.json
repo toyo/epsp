@@ -9,7 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/main",
+            "program": "${workspaceFolder}/cmd/p2pquake",
             "args": ["-d"]
         }
     ]

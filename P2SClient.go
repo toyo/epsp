@@ -172,7 +172,7 @@ func (p2s P2SClient) GetKey(ctx context.Context, peer *Peer, echo bool) (err err
 
 		var retval []string
 		if retval, err = p2s.Get(ctx); err != nil {
-			err = errors.Wrap(err, "鍵割当要求受信")
+			err = errors.Wrap(err, "鍵割当要求応答受信")
 			return
 		}
 
@@ -199,6 +199,8 @@ func (p2s P2SClient) GetKey(ctx context.Context, peer *Peer, echo bool) (err err
 			logln(`[DEBUG] サーバ`+p2s.IPPort+`: 公開鍵`, peer.pubKey)
 			logln(`[DEBUG] サーバ`+p2s.IPPort+`: 有効期限`, peer.keyExpire)
 			logln(`[DEBUG] サーバ`+p2s.IPPort+`: 鍵署名`, peer.keySig)
+
+			peer.SaveKey()
 
 		case "295":
 			logln(`[DEBUG] サーバ` + p2s.IPPort + `: キー割当済`)

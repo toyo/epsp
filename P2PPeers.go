@@ -16,7 +16,7 @@ import (
 type P2PPeers []*P2PPeer
 
 // NewP2PServers は、P2PServerを立ち上げます
-func (pps *P2PPeers) NewP2PServers(ctx context.Context, myagent []string, port int, code5xx func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) (global bool, err error) {
+func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent []string, port int, code5xx func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) (global bool, err error) {
 
 	laddr, err := traditionalnet.ResolveTCPAddr("tcp", "127.0.0.1:"+strconv.Itoa(port))
 	if err != nil {
@@ -54,7 +54,7 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, myagent []string, port i
 					mu.Lock()
 					*pps = append(*pps, ps)
 					mu.Unlock()
-					err = ps.NetLoop(ctx, myagent, ConnectedIPPortPeersList, code5xx)
+					err = ps.NetLoop(ctx, mypeerid, myagent, ConnectedIPPortPeersList, code5xx)
 					if err != nil {
 						logln(`[INFO] ピア`, ps.PeerID+`: サーバ通信異常終了 `+strings.Join(ps.Agent, `:`), err)
 					} else {
@@ -79,7 +79,7 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, myagent []string, port i
 }
 
 // AddP2PClients は、P2PClientsを追加します
-func (pps *P2PPeers) AddP2PClients(ctx context.Context, otherPeers []string, myagent []string, p2mpcmd func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) {
+func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPeers []string, myagent []string, p2mpcmd func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -95,7 +95,7 @@ func (pps *P2PPeers) AddP2PClients(ctx context.Context, otherPeers []string, mya
 				*pps = append(*pps, pc)
 				mu.Unlock()
 				wg.Done()
-				err = pc.NetLoop(ctx, myagent, ConnectedIPPortPeersList, p2mpcmd)
+				err = pc.NetLoop(ctx, mypeerid, myagent, ConnectedIPPortPeersList, p2mpcmd)
 				if err != nil {
 					logln(`[INFO] ピア`, pc.PeerID+`: クライアント通信異常終了 `+strings.Join(pc.Agent, `:`), err)
 				} else {
