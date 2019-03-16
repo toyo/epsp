@@ -69,15 +69,16 @@ outerloop:
 }
 
 // loop は、送られてきた文字列に対する処理を行います
-func (p *P2PPeer) loop(retval []string, mypeerid string, agent []string, peers func() []string, p2mpcmd func(peer *P2PPeer, ss []string) (err error)) error {
-	if len(retval) == 0 {
+func (p *P2PPeer) loop(retval []string, mypeerid string, myagent []string, peers func() []string, p2mpcmd func(peer *P2PPeer, ss []string) (err error)) error {
+	switch {
+	case len(retval) == 0:
 		return errors.New(`空行`)
-	} else if len(retval[0]) == 1 {
+	case len(retval[0]) == 1:
 		return errors.New(`経由数なし: ` + strings.Join(retval, ` `))
-	} else if retval[0][0] == '5' || retval[0] == `615` || retval[0] == `635` { // relay message.
-		return errors.Wrap(p2mpcmd(p, retval), `p2mpcmd`)
-	} else { // Not relayed.
-		return errors.Wrap(p.p2pcmd(agent, mypeerid, peers, retval), `p2pcmd`)
+	case retval[0][0] == '5' || retval[0] == `615` || retval[0] == `635`:
+		return errors.Wrap(p2mpcmd(p, retval), `p2mpcmd`) // relay message.
+	default:
+		return errors.Wrap(p.p2pcmd(myagent, mypeerid, peers, retval), `p2pcmd`) // Not relayed.
 	}
 }
 

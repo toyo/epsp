@@ -259,6 +259,21 @@ func (peer *Peer) cmd635(retval []string) (sent bool, err error) {
 	return false, nil
 }
 
+func (peer *Peer) mpReSent(from *P2PPeer, retval []string) error {
+	if hops, err := strconv.ParseUint(retval[1], 10, 64); err == nil {
+		if peer.PeerCountsByRegion.NumOfAllPeers() >= hops {
+			retval[1] = strconv.FormatUint(hops+1, 10) // Hop count add
+			logln(`[DEBUG] ピア` + peer.PeerID + `: マルチキャスト送信:` + strings.Join(retval[:2], ` `))
+			go peer.WriteExceptFrom(from, retval...)
+		} else {
+			return errors.Errorf(`総参加ピア数(%d) < 経由数(%d)`, peer.PeerCountsByRegion.NumOfAllPeers(), hops)
+		}
+	} else {
+		return errors.New(`経由数書式異常 ` + strings.Join(retval, ` `))
+	}
+	return nil
+}
+
 func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 	recvdata := strings.Split(retval[2], `:`)
 
@@ -281,12 +296,12 @@ func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 	case `561`:
 		peer.cmd561(recvdata)
 	case `635`:
-		if sent, err := peer.cmd635(retval); err != nil {
+		sent, err := peer.cmd635(retval)
+		if err != nil {
 			return err
-		} else {
-			if sent {
-				return nil
-			}
+		}
+		if sent {
+			return nil
 		}
 	case `615`:
 		if err := peer.cmd615(from, recvdata, retval[1]); err != nil {
@@ -296,16 +311,5 @@ func (peer *Peer) p2mpcmd(from *P2PPeer, retval []string) error {
 		go peer.usercmd(retval[0], recvdata...)
 	}
 
-	if hops, err := strconv.ParseUint(retval[1], 10, 64); err == nil {
-		if peer.PeerCountsByRegion.NumOfAllPeers() >= hops {
-			retval[1] = strconv.FormatUint(hops+1, 10) // Hop count add
-			logln(`[DEBUG] ピア` + peer.PeerID + `: マルチキャスト送信:` + strings.Join(retval[:2], ` `))
-			go peer.WriteExceptFrom(from, retval...)
-		} else {
-			return errors.Errorf(`総参加ピア数(%d) < 経由数(%d)`, peer.PeerCountsByRegion.NumOfAllPeers(), hops)
-		}
-	} else {
-		return errors.New(`経由数書式異常 ` + strings.Join(retval, ` `))
-	}
-	return nil
+	return peer.mpReSent(from, retval)
 }
