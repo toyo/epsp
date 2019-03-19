@@ -10,25 +10,27 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (p *P2PPeer) chanGet(ctx context.Context, retvalch chan []string, errch chan error) {
+func (p *P2PPeer) chanGet(ctx context.Context, retvalch chan string, errch chan error) {
 	for {
 		retval, err := p.Get(ctx)
-		errch <- err
-		retvalch <- retval
 		if err != nil {
 			if err != io.EOF {
 				p.Close()
 			}
+			errch <- err
+			retvalch <- ``
 			break
 		}
+		errch <- nil
+		retvalch <- retval
 	}
 }
 
 // NetLoop は、接続済みTCP接続からデータの読み書きします
-func (p *P2PPeer) NetLoop(ctx context.Context, mypeerid string, agent []string, peers func() []string, codep2mp func(peer *P2PPeer, ss []string) (err error)) (err error) {
+func (p *P2PPeer) NetLoop(ctx context.Context, mypeerid string, agent []string, peers func() []string, codep2mp func(peer *P2PPeer, retval []string) (err error)) (err error) {
 	timer := time.NewTicker(5 * time.Minute)
 	defer timer.Stop()
-	retvalch := make(chan []string)
+	retvalch := make(chan string)
 	errch := make(chan error)
 	go p.chanGet(ctx, retvalch, errch) // get received value.
 
@@ -69,16 +71,17 @@ outerloop:
 }
 
 // loop は、送られてきた文字列に対する処理を行います
-func (p *P2PPeer) loop(retval []string, mypeerid string, myagent []string, peers func() []string, codep2mp func(peer *P2PPeer, ss []string) (err error)) error {
+func (p *P2PPeer) loop(retval string, mypeerid string, myagent []string, peers func() []string, codep2mp func(peer *P2PPeer, retval []string) (err error)) error {
+	retvals := strings.SplitN(retval, ` `, 3)
 	switch {
-	case len(retval) == 0:
+	case len(retvals) == 0:
 		return errors.New(`空行`)
-	case len(retval[0]) == 1:
-		return errors.New(`経由数なし: ` + strings.Join(retval, ` `))
-	case retval[0][0] == '5' || retval[0] == `615` || retval[0] == `635`:
-		return errors.Wrap(codep2mp(p, retval), `codep2mp`) // relay message.
+	case len(retvals) == 1:
+		return errors.New(`経由数なし: ` + retval)
+	case retvals[0][0] == '5' || retvals[0] == `615` || retvals[0] == `635`:
+		return errors.Wrap(codep2mp(p, retvals), `codep2mp`) // relay message.
 	default:
-		return errors.Wrap(p.p2pcmd(myagent, mypeerid, peers, retval), `p2pcmd`) // Not relayed.
+		return errors.Wrap(p.p2pcmd(myagent, mypeerid, peers, retvals), `p2pcmd`) // Not relayed.
 	}
 }
 

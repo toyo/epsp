@@ -56,13 +56,14 @@ func NewP2SClient(ctx context.Context, paddr string, myagent0 []string) (p2s *P2
 
 outerloop:
 	for {
-		var retval []string
-		if retval, err = p2s.EPSPConn.Get(ctx); err != nil { // バージョン要求がこないよ
+		var rv string
+		if rv, err = p2s.EPSPConn.Get(ctx); err != nil { // バージョン要求がこないよ
 			p2s.Close(ctx)
-			err = errors.Wrap(err, `バージョン要求なし: `+strings.Join(retval, ` `))
+			err = errors.Wrap(err, `バージョン要求なし: `+rv)
 			p2s = nil
 			return
 		}
+		retval := strings.Split(rv, ` `)
 		switch retval[0] {
 		case `211`: // バージョン要求
 			if err = p2s.code211(myagent); err != nil {
@@ -73,12 +74,10 @@ outerloop:
 			myagent = p2s.code212(myagent, retval)
 			break outerloop
 		default:
-			if retval, err = p2s.EPSPConn.Get(ctx); err != nil { // バージョン要求がこないよ
-				p2s.Close(ctx)
-				err = errors.Wrap(err, `コマンド受領エラー `+strings.Join(retval, ` `))
-				p2s = nil
-				return
-			}
+			p2s.Close(ctx)
+			err = errors.Wrap(err, `コマンド受領エラー `+strings.Join(retval, ` `))
+			p2s = nil
+			return
 		}
 	}
 	return
@@ -92,11 +91,12 @@ func (p2s P2SClient) GetTemporaryPeerID(ctx context.Context) (peerID string, err
 		return
 	}
 
-	var retval []string
-	if retval, err = p2s.Get(ctx); err != nil {
+	var rv string
+	if rv, err = p2s.Get(ctx); err != nil {
 		err = errors.Wrap(err, "ピアID暫定割当受信")
 		return
 	}
+	retval := strings.Split(rv, ` `)
 
 	switch retval[0] {
 	case `233`:
@@ -119,12 +119,13 @@ func (p2s P2SClient) GetPeers(ctx context.Context, peerID string) (peers []strin
 	}
 	logln(`[DEBUG] サーバ` + p2s.IPPort + `: 接続先ピア情報要求`)
 
-	retval, err := p2s.Get(ctx)
+	rv, err := p2s.Get(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "接続先ピア情報要求受信")
 		return
 	}
 
+	retval := strings.Split(rv, ` `)
 	switch retval[0] {
 	case `235`:
 		peers = strings.Split(retval[2], `:`)
@@ -145,12 +146,13 @@ func (p2s P2SClient) Regist(ctx context.Context, peerID string, port int, region
 	}
 	logln(`[DEBUG] サーバ` + p2s.IPPort + `: ピアID本割当要求`)
 
-	retval, err := p2s.Get(ctx)
+	rv, err := p2s.Get(ctx)
 	if err != nil {
 		err = errors.Wrap(err, `ピアID本割当受信`)
 		return
 	}
 
+	retval := strings.Split(rv, ` `)
 	switch retval[0] {
 	case `236`:
 		logln(`[DEBUG] サーバ`+p2s.IPPort+`: ピアID本割当完了 参加ピア数: `, retval[2])
@@ -179,12 +181,13 @@ func (p2s P2SClient) GetKey(ctx context.Context, peer *Peer, echo bool) (err err
 			logln(`[DEBUG] サーバ` + p2s.IPPort + `: 鍵割当要求`)
 		}
 
-		var retval []string
-		if retval, err = p2s.Get(ctx); err != nil {
+		var rv string
+		if rv, err = p2s.Get(ctx); err != nil {
 			err = errors.Wrap(err, "鍵割当要求応答受信")
 			return
 		}
 
+		retval := strings.Split(rv, ` `)
 		switch retval[0] {
 		case "237":
 			fallthrough
@@ -227,10 +230,11 @@ func (p2s *P2SClient) Echo(ctx context.Context, peerID string, peercount uint64)
 	if err = p2s.EPSPConn.Write(`123`, `1`, peerID+":"+strconv.FormatUint(peercount, 10)); err == nil {
 		logln(`[DEBUG] サーバ` + p2s.IPPort + `: エコー要求送信 PeerID: ` + peerID)
 		p2s.SetPingTime()
-		var retval []string
+		var rv string
 		ctxtimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		if retval, err = p2s.Get(ctxtimeout); err == nil {
+		if rv, err = p2s.Get(ctxtimeout); err == nil {
+			retval := strings.Split(rv, ` `)
 			switch retval[0] {
 			case `243`:
 				logln(`[DEBUG] サーバ` + p2s.IPPort + `: エコー返信`)
@@ -257,13 +261,14 @@ func (p2s P2SClient) CheckPortOpen(ctx context.Context, peerID string, peercount
 		return
 	}
 	logln(`[DEBUG] サーバ` + p2s.IPPort + `: ポート開放確認`)
-	var retval []string
-	retval, err = p2s.Get(ctx)
+	var rv string
+	rv, err = p2s.Get(ctx)
 	if err != nil {
 		err = errors.Wrap(err, `ポート開放確認不能`)
 		return
 	}
 
+	retval := strings.Split(rv, ` `)
 	switch retval[0] {
 	case `234`:
 		switch retval[2] {
@@ -290,12 +295,13 @@ func (p2s P2SClient) PeerCountByRegion(ctx context.Context, code5xx func(from *P
 	}
 	logln(`[DEBUG] サーバ` + p2s.IPPort + `: 各地域ピア数要求`)
 
-	var retval []string
-	retval, err = p2s.Get(ctx)
+	var rv string
+	rv, err = p2s.Get(ctx)
 	if err != nil {
 		err = errors.Wrap(err, "サーバ")
 		return
 	}
+	retval := strings.Split(rv, ` `)
 
 	switch retval[0] {
 	case `247`:
@@ -320,12 +326,13 @@ func (p2s P2SClient) GetTime(ctx context.Context) (t time.Time, err error) {
 	}
 	logln(`[DEBUG] サーバ` + p2s.IPPort + `: プロトコル時刻要求`)
 
-	retval, err := p2s.Get(ctx)
+	rv, err := p2s.Get(ctx)
 	if err != nil {
 		err = errors.Wrap(err, `プロトコル時刻取得不能`)
 		return
 	}
 
+	retval := strings.Split(rv, ` `)
 	if retval[0] != "238" {
 		err = errors.New(`プロトコル時刻がこないよ[` + retval[0] + `]`)
 		return
@@ -356,12 +363,14 @@ func (p2s *P2SClient) Close(ctx context.Context) {
 	}
 	logln(`[DEBUG] サーバ` + p2s.IPPort + `: 通信の終了要求`)
 
-	var retval []string
-	if retval, err = p2s.Get(ctx); err != nil {
+	var rv string
+	if rv, err = p2s.Get(ctx); err != nil {
 		logln(`[WARN] サーバ` + p2s.IPPort + `: P2SClient close 通信の終了不着`)
 		p2s.EPSPConn.Close()
 		return
 	}
+
+	retval := strings.Split(rv, ` `)
 
 	if retval[0] != "239" {
 		logln(`[WARN] サーバ` + p2s.IPPort + `: P2SClient close 通信の終了がこないよ`)

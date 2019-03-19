@@ -16,7 +16,7 @@ import (
 type P2PPeers []*P2PPeer
 
 // NewP2PServers は、P2PServerを立ち上げます
-func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent []string, port int, code5xx func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) (global bool, err error) {
+func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent []string, port int, codep2mp func(from *P2PPeer, retval []string) error, ConnectedIPPortPeersList func() []string, incoming uint64) (global bool, err error) {
 
 	laddr, err := traditionalnet.ResolveTCPAddr("tcp", "127.0.0.1:"+strconv.Itoa(port))
 	if err != nil {
@@ -36,7 +36,7 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent
 	pschan := make(chan *P2PPeer)
 	go func(l *traditionalnet.TCPListener) {
 		for {
-			if ps, err := NewP2PServer(ctx, l, myagent, code5xx); err != nil {
+			if ps, err := NewP2PServer(ctx, l, myagent); err != nil {
 				logln(`[WARN] `, err)
 			} else {
 				pschan <- ps
@@ -54,7 +54,7 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent
 					mu.Lock()
 					*pps = append(*pps, ps)
 					mu.Unlock()
-					err = ps.NetLoop(ctx, mypeerid, myagent, ConnectedIPPortPeersList, code5xx)
+					err = ps.NetLoop(ctx, mypeerid, myagent, ConnectedIPPortPeersList, codep2mp)
 					if err != nil {
 						logln(`[INFO] ピア`, ps.PeerID+`: サーバ通信異常終了 `+strings.Join(ps.Agent, `:`), err)
 					} else {
@@ -86,7 +86,7 @@ func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPe
 	for i := range otherPeers {
 		wg.Add(1)
 		go func(i int) {
-			pc, err := NewP2PClient(ctx, otherPeers[i], ConnectedIPPortPeersList, codep2mp)
+			pc, err := NewP2PClient(ctx, otherPeers[i], ConnectedIPPortPeersList)
 			if err != nil {
 				logln(`[INFO] ピア`+pc.GetPeerIDorIPPort()+`: 接続失敗 `, err)
 				wg.Done()

@@ -126,10 +126,10 @@ func (p *EPSPConn) IsConn() bool {
 	return p.GetDiscTime() == nil
 }
 
-// Get は、データを一行取得し、スペースで区切り、文字列配列を返します
-func (p *EPSPConn) Get(ctx context.Context) ([]string, error) {
+// Get は、データを一行取得し、文字列を返します
+func (p *EPSPConn) Get(ctx context.Context) (string, error) {
 	if !p.IsConn() {
-		return nil, errors.New(`No Connection`)
+		return ``, errors.New(`No Connection`)
 	}
 
 	readch := make(chan []byte)
@@ -160,12 +160,12 @@ func (p *EPSPConn) Get(ctx context.Context) ([]string, error) {
 			if err == io.EOF {
 				p.Close()
 			}
-			return nil, errors.Wrap(err, `ReadLine`)
+			return ``, errors.Wrap(err, `ReadLine`)
 		}
 		p.AddRx()
-		return strings.SplitN(string(<-readch), ` `, 3), err
+		return string(<-readch), err
 	case <-ctx.Done():
-		return nil, errors.Wrap(ctx.Err(), `ReadLine`)
+		return ``, errors.Wrap(ctx.Err(), `ReadLine`)
 	}
 }
 

@@ -11,7 +11,7 @@ import (
 )
 
 // NewP2PServer は、ピアからの接続を待ちます
-func NewP2PServer(ctx context.Context, l *traditionalnet.TCPListener, myagent []string, code5xx func(p *P2PPeer, ss []string) (err error)) (ps *P2PPeer, err error) {
+func NewP2PServer(ctx context.Context, l *traditionalnet.TCPListener, myagent []string) (ps *P2PPeer, err error) {
 	ps = new(P2PPeer)
 	ps.conn, err = l.AcceptTCP()
 	if err != nil {
@@ -41,7 +41,7 @@ func NewP2PServer(ctx context.Context, l *traditionalnet.TCPListener, myagent []
 }
 
 // NewP2PClient は、他のピアと接続します。
-func NewP2PClient(ctx context.Context, ipportpeerid string, connectedIPPortPeersList func() []string, code5xx func(from *P2PPeer, ss []string) (err error)) (pc *P2PPeer, err error) {
+func NewP2PClient(ctx context.Context, ipportpeerid string, connectedIPPortPeersList func() []string) (pc *P2PPeer, err error) {
 	ipportpeerids := strings.Split(ipportpeerid, `,`)
 
 	for _, connedctedipportpeerid := range connectedIPPortPeersList() {
