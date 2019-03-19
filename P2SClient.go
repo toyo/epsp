@@ -63,7 +63,7 @@ outerloop:
 			p2s = nil
 			return
 		}
-		retval := strings.Split(rv, ` `)
+		retval := strings.SplitN(rv, ` `, 3)
 		switch retval[0] {
 		case `211`: // バージョン要求
 			if err = p2s.code211(myagent); err != nil {
@@ -96,7 +96,7 @@ func (p2s P2SClient) GetTemporaryPeerID(ctx context.Context) (peerID string, err
 		err = errors.Wrap(err, "ピアID暫定割当受信")
 		return
 	}
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 
 	switch retval[0] {
 	case `233`:
@@ -125,7 +125,7 @@ func (p2s P2SClient) GetPeers(ctx context.Context, peerID string) (peers []strin
 		return
 	}
 
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 	switch retval[0] {
 	case `235`:
 		peers = strings.Split(retval[2], `:`)
@@ -152,7 +152,7 @@ func (p2s P2SClient) Regist(ctx context.Context, peerID string, port int, region
 		return
 	}
 
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 	switch retval[0] {
 	case `236`:
 		logln(`[DEBUG] サーバ`+p2s.IPPort+`: ピアID本割当完了 参加ピア数: `, retval[2])
@@ -187,7 +187,7 @@ func (p2s P2SClient) GetKey(ctx context.Context, peer *Peer, echo bool) (err err
 			return
 		}
 
-		retval := strings.Split(rv, ` `)
+		retval := strings.SplitN(rv, ` `, 3)
 		switch retval[0] {
 		case "237":
 			fallthrough
@@ -234,7 +234,7 @@ func (p2s *P2SClient) Echo(ctx context.Context, peerID string, peercount uint64)
 		ctxtimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		if rv, err = p2s.Get(ctxtimeout); err == nil {
-			retval := strings.Split(rv, ` `)
+			retval := strings.SplitN(rv, ` `, 3)
 			switch retval[0] {
 			case `243`:
 				logln(`[DEBUG] サーバ` + p2s.IPPort + `: エコー返信`)
@@ -268,7 +268,7 @@ func (p2s P2SClient) CheckPortOpen(ctx context.Context, peerID string, peercount
 		return
 	}
 
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 	switch retval[0] {
 	case `234`:
 		switch retval[2] {
@@ -301,7 +301,7 @@ func (p2s P2SClient) PeerCountByRegion(ctx context.Context, code5xx func(from *P
 		err = errors.Wrap(err, "サーバ")
 		return
 	}
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 
 	switch retval[0] {
 	case `247`:
@@ -332,7 +332,7 @@ func (p2s P2SClient) GetTime(ctx context.Context) (t time.Time, err error) {
 		return
 	}
 
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 	if retval[0] != "238" {
 		err = errors.New(`プロトコル時刻がこないよ[` + retval[0] + `]`)
 		return
@@ -370,7 +370,7 @@ func (p2s *P2SClient) Close(ctx context.Context) {
 		return
 	}
 
-	retval := strings.Split(rv, ` `)
+	retval := strings.SplitN(rv, ` `, 3)
 
 	if retval[0] != "239" {
 		logln(`[WARN] サーバ` + p2s.IPPort + `: P2SClient close 通信の終了がこないよ`)

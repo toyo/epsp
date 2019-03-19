@@ -78,6 +78,8 @@ func (p *P2PPeer) loop(retval string, mypeerid string, myagent []string, peers f
 		return errors.New(`空行`)
 	case len(retvals) == 1:
 		return errors.New(`経由数なし: ` + retval)
+	case len(retvals[0]) != 3:
+		return errors.New(`Unknown command: ` + retval)
 	case retvals[0][0] == '5' || retvals[0] == `615` || retvals[0] == `635`:
 		return errors.Wrap(codep2mp(p, retvals), `codep2mp`) // relay message.
 	default:
