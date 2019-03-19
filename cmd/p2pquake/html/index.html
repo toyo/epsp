@@ -66,26 +66,18 @@
 
 <body>
 	<div id="site">
-		<div id="title">EPSP</div>
+		<div id="title">EPSP　<a href="/send615">ピアの相互接続状況はこちら(実験中)</a></div>
 		<div id="cancel"><input type="button" value="Terminate My Peer" onclick="cancel()"></div>
 		<div id="main">
 			こちらから接続したピア<div id="Clients">初期化中</div>
 			相手から接続されたピア<div id="Servers">初期化中</div>
+			
 			ピアの地域<div id="regions_div">初期化中</div>
 		</div>
 	</div>
 	</div>
 
 	<script type="text/javascript">
-
-		var websocketschema = function () {
-			switch (location.protocol) {
-				case 'http:':
-					return 'ws:';
-				case 'https:':
-					return 'wss:'
-			}
-		}
 
 		var cancel = function () {
 			var cancelhttp = new XMLHttpRequest();
@@ -99,14 +91,14 @@
 			columns: columns,
 			initialSort: [{ column: "ConnTime", dir: "asc" },],
 		});
-		var clients = new WebSocket(websocketschema() + '//' + location.host + '/ws/Clients');
+		var clients = new WebSocket('ws://' + location.host + '/ws/Clients');
 		clients.onmessage = function (e) {
 			clientstable.setData(e.data);
 			clientstable.setSort([{ column: "ConnTime", dir: "asc" },]);
 		};
 		clients.onclose = function (e) {
 			console.log("clients 切断しました。(" + e.code + ")");
-			clients = new WebSocket(websocketschema() + '//' + location.host + '/ws/Clients');
+			clients = new WebSocket('ws://' + location.host + '/ws/Clients');
 		};
 
 		var serverstable = new Tabulator("#Servers", {
@@ -115,17 +107,17 @@
 			columns: columns,
 			initialSort: [{ column: "ConnTime", dir: "asc" },],
 		});
-		var servers = new WebSocket(websocketschema() + '//' + location.host + '/ws/Servers');
+		var servers = new WebSocket('ws://' + location.host + '/ws/Servers');
 		servers.onmessage = function (e) {
 			serverstable.setData(e.data);
 			serverstable.setSort([{ column: "ConnTime", dir: "asc" },]);
 		};
 		servers.onclose = function (e) {
 			console.log("servers 切断しました。(" + e.code + ")");
-			servers = new WebSocket(websocketschema() + '//' + location.host + '/ws/Servers');
+			servers = new WebSocket('ws://' + location.host + '/ws/Servers');
 		};
 
-		var peercounts = new WebSocket(websocketschema() + '//' + location.host + '/ws/PeerCountByRegion');
+		var peercounts = new WebSocket('ws://' + location.host + '/ws/PeerCountByRegion');
 		peercounts.onmessage = function (e) {
 			d = JSON.parse(e.data);
 			if (d.length > 2) {
@@ -134,7 +126,7 @@
 		};
 		peercounts.onclose = function (e) {
 			console.log("peercounts 切断しました。(" + e.code + ")");
-			peercounts = new WebSocket(websocketschema() + '//' + location.host + '/ws/PeerCountByRegion');
+			peercounts = new WebSocket('ws://' + location.host + '/ws/PeerCountByRegion');
 		};
 
 	</script>

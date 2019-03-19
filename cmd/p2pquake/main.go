@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -17,6 +17,8 @@ import (
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 )
+
+var h = NewHandler635()
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -69,18 +71,28 @@ IBEQ==
 		http.ServeFile(w, r, "html/index.html")
 	})
 
+	hs.HandleFunc("/635.html", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "html/635.html")
+	})
+
 	hs.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
 		cancel()
 	})
 
+	hs.HandleFunc("/send615", func(w http.ResponseWriter, r *http.Request) {
+		h.clean635()
+		peer.WriteExceptFrom(nil, `615`, `1`, peer.PeerID+`:`+strconv.FormatInt(time.Now().Unix(), 10))
+		time.Sleep(2 * time.Second)
+		//http.Redirect(w, r, "/635.html", 30)
+		w.Header().Add(`Cache-Control`, `no-cache, no-store, must-revalidate`)
+		http.ServeFile(w, r, "html/635.html")
+	})
+
+	hs.Handle("/635.json", h)
+
 	errCh := make(chan error)
 	go func() {
-		port := os.Getenv("PORT")
-		if port == "" {
-			port = "6980"
-		}
-
-		log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", port), hs))
+		errCh <- http.ListenAndServe(`:6980`, hs)
 	}()
 
 	go func() {
@@ -138,6 +150,8 @@ func usercmd(code string, recvdata ...string) {
 	case "555":
 		kanchidata := strings.Split(recvdata[5], `,`)
 		log.Println("地震感知情報 " + epsp.Area(kanchidata[1]) + `(PubKey:` + recvdata[2] + `)から` + kanchidata[0])
+	case "635":
+		h.cmd635(recvdata...)
 	default:
 		log.Println(`未知コード受信 ` + code + ` n ` + strings.Join(recvdata, `:`))
 	}
