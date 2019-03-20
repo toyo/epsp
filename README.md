@@ -1,4 +1,9 @@
 # go-epsp
+
+[![Build Status](https://travis-ci.org/toyo/epsp.svg?branch=master)](https://travis-ci.org/toyo/epsp)
+[![GoDoc](https://godoc.org/github.com/toyo/epsp?status.svg)](https://godoc.org/github.com/toyo/epsp)
+[![Go Report Card](https://goreportcard.com/badge/github.com/toyo/epsp)](https://goreportcard.com/report/github.com/toyo/epsp)
+
 Golang library for EPSP protocol.
 
 EPSP protocol is shown in 
