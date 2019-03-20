@@ -9,6 +9,7 @@ FROM alpine
 WORKDIR /root/
 COPY --from=builder /go/src/github.com/toyo/epsp/cmd/p2pquake/app ./app
 COPY --from=builder /go/src/github.com/toyo/epsp/cmd/p2pquake/html/index.html ./html/index.html
+COPY --from=builder /go/src/github.com/toyo/epsp/cmd/p2pquake/html/635.html ./html/635.html
 ENTRYPOINT ["./app","-d"]
 VOLUME ["/tmp"]
 
