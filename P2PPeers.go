@@ -114,7 +114,7 @@ func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPe
 
 func (pps *P2PPeers) deleteClosedFromList() {
 	for i := 0; i < len(*pps); i++ {
-		if !(*pps)[i].IsConn() && time.Since(*(*pps)[i].GetDiscTime()) > 1*time.Minute { // Delete connection after 3hour from last pong.
+		if !(*pps)[i].IsConn() && time.Since(*(*pps)[i].GetDiscTime()) > 1*time.Minute {
 			*pps = append((*pps)[:i], (*pps)[i+1:]...)
 			i--
 		}
@@ -123,7 +123,8 @@ func (pps *P2PPeers) deleteClosedFromList() {
 
 func (pps *P2PPeers) deleteUnusedPeer() {
 	for i := 0; i < len(*pps); i++ {
-		if (*pps)[i].GetPingRecv() != nil && (time.Since(*(*pps)[i].GetPingRecv()) > 3*time.Hour) { // Delete connection after 3hour from last pong.
+		if ((*pps)[i].GetPingRecv() != nil && (time.Since(*(*pps)[i].GetPingRecv()) > 1*time.Hour)) || // Delete connection after 1hour from last pong.
+			((*pps)[i].GetPingRecv() == nil && (time.Since(*(*pps)[i].GetConnTime()) > 1*time.Hour)) { // Delete conntction if no pong and 1hour past.
 			(*pps)[i].Close()
 			logln(`[INFO] ピア` + (*pps)[i].PeerID + `: 未通信、終了`)
 		}

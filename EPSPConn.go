@@ -78,6 +78,11 @@ func (p *EPSPConn) SetLastRXTime() {
 	*p.LastRXTime = time.Now()
 }
 
+// GetConnTime は、接続した時刻を取得します
+func (p *EPSPConn) GetConnTime() *time.Time {
+	return p.ConnTime
+}
+
 // GetPingTime は、Pingした時刻を取得します
 func (p *EPSPConn) GetPingTime() *time.Time {
 	return p.PingTime
