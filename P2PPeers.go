@@ -64,6 +64,7 @@ func (pps *P2PPeers) NewP2PServers(ctx context.Context, mypeerid string, myagent
 			case <-timer.C:
 				mu.Lock()
 				pps.deleteClosedFromList()
+				pps.deleteUnusedPeer()
 				pps.deleteManyDuplicatePeer(incoming, 100)
 				mu.Unlock()
 			case <-ctx.Done():
@@ -106,17 +107,25 @@ func (pps *P2PPeers) AddP2PClients(ctx context.Context, mypeerid string, otherPe
 	}
 	wg.Wait()
 	pps.deleteClosedFromList()
+	pps.deleteUnusedPeer()
 	pps.deleteManyDuplicatePeer(incoming, 10)
 
 }
 
 func (pps *P2PPeers) deleteClosedFromList() {
 	for i := 0; i < len(*pps); i++ {
-
-		if (!(*pps)[i].IsConn() && time.Since(*(*pps)[i].GetDiscTime()) > 1*time.Minute) || // Delete connection after 3min from disconnect.
-			((*pps)[i].GetPingRecv() != nil && (time.Since(*(*pps)[i].GetPingRecv()) > 3*time.Hour)) { // Delete connection after 3hour from last pong.
+		if !(*pps)[i].IsConn() && time.Since(*(*pps)[i].GetDiscTime()) > 1*time.Minute { // Delete connection after 3hour from last pong.
 			*pps = append((*pps)[:i], (*pps)[i+1:]...)
 			i--
+		}
+	}
+}
+
+func (pps *P2PPeers) deleteUnusedPeer() {
+	for i := 0; i < len(*pps); i++ {
+		if (*pps)[i].GetPingRecv() != nil && (time.Since(*(*pps)[i].GetPingRecv()) > 3*time.Hour) { // Delete connection after 3hour from last pong.
+			(*pps)[i].Close()
+			logln(`[INFO] ピア` + (*pps)[i].PeerID + `: 未通信、終了`)
 		}
 	}
 }
