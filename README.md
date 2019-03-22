@@ -14,9 +14,13 @@ Need golang 1.9 or later because sync.Map is used.
 
 If you want to run on P2PQuake network ( https://www.p2pquake.net/ )
 
+    % cd %GOPATH%\src\github.com\toyo\epsp\cmd\p2pquake (Win)
+
+    % cd $GOPATH/src/github.com/toyo/epsp/cmd/p2pquake (Unix)
+
     % go get github.com/toyo/epsp/cmd/p2pquake
 
-    % %GOPATH%\bin\p2pquake -d (Win)
+    % %GOPATH%/bin/p2pquake -d (Win)
 
     % $GOPATH/bin/p2pquake -d (Unix)
 
