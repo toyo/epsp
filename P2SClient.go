@@ -77,7 +77,7 @@ outerloop:
 			p2s.Close(ctx)
 			err = errors.Wrap(err, `コマンド受領エラー `+strings.Join(retval, ` `))
 			p2s = nil
-			return
+			break outerloop
 		}
 	}
 	return
