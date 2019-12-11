@@ -14,11 +14,13 @@ type peer635 struct {
 	ConnectedPeerID []string
 }
 
+// Handler635 は、調査エコーの相手を保持します
 type Handler635 struct {
 	p635  map[string]peer635
 	mutex *sync.RWMutex
 }
 
+// NewHandler635 は、Handler635 のコンストラクタです
 func NewHandler635() (h *Handler635) {
 	h = new(Handler635)
 	h.clean635()
